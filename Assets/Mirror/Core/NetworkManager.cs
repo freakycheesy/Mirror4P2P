@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
 
 namespace Mirror
 {
+    public enum NetworkTopologyMode {ClientToServer, P2P}
     public enum PlayerSpawnMethod { Random, RoundRobin }
     public enum NetworkManagerMode { Offline, ServerOnly, ClientOnly, Host }
     public enum HeadlessStartOptions { DoNothing, AutoStartServer, AutoStartClient }
@@ -58,9 +60,15 @@ namespace Mirror
         // [Tooltip("Client broadcasts 'sendRate' times per second. Use around 60Hz for fast paced games like Counter-Strike to minimize latency. Use around 30Hz for games like WoW to minimize computations. Use around 1-10Hz for slow paced games like EVE.")]
         // public int clientSendRate = 30; // 33 ms
 
+        [Header("Network Info")]
+
+        [Tooltip("Network Modes:\n"+
+        "Client To Server: Default Mirror Networking, clients connect to a server and the session is done when the server stops.\n"+
+        "Peer To Peer: Distrubuted Authority, clients connect with each other and one client is marked as the server (Round Robin), and the session continues until everyone is disconnected.")]
+        public NetworkTopologyMode networkTopologyMode = NetworkTopologyMode.ClientToServer;
+
         /// <summary>Automatically switch to this scene upon going offline (on start / on disconnect / on shutdown).</summary>
         // transport layer
-        [Header("Network Info")]
         [Tooltip("Transport component attached to this object that server and client will use to connect")]
         public Transport transport;
 
@@ -586,8 +594,9 @@ namespace Mirror
         }
 
         /// <summary>Stops the server from listening and simulating the game.</summary>
-        public void StopServer()
+        public async void StopServer()
         {
+            if (await P2POnServerStop())
             // return if already stopped to avoid recursion deadlock
             if (!NetworkServer.active)
                 return;
@@ -763,7 +772,7 @@ namespace Mirror
             // Don't require authentication because server may send NotReadyMessage from ServerChangeScene
             NetworkClient.RegisterHandler<NotReadyMessage>(OnClientNotReadyMessageInternal, false);
             NetworkClient.RegisterHandler<SceneMessage>(OnClientSceneInternal, false);
-
+            if (IsP2PMode()) NetworkClient.RegisterHandler<P2PServerDisconnectMessage>((a)=>P2POnClientDisconnect(a.SavedConnections));
             if (playerPrefab != null)
                 NetworkClient.RegisterPrefab(playerPrefab);
 
@@ -1258,6 +1267,7 @@ namespace Mirror
         //   Disconnect() -> ask Transport -> Transport.OnDisconnected -> Cleanup
         void OnClientDisconnectInternal()
         {
+            if (P2POnClientDisconnect(NetworkServer.connections)) return;
             //Debug.Log("NetworkManager.OnClientDisconnectInternal");
 
             // Only let this run once. StopClient in Host mode changes to ServerOnly
@@ -1309,6 +1319,60 @@ namespace Mirror
                 Invoke(nameof(ClientChangeOfflineScene), offlineSceneLoadDelay);
 
             networkSceneName = "";
+        }
+
+        public bool IsClientToServerMode() => networkTopologyMode == NetworkTopologyMode.ClientToServer;
+        public bool IsP2PMode() => networkTopologyMode == NetworkTopologyMode.P2P;
+
+        /// <summary>
+        /// If True, Make Server send leave message
+        /// If False, Dont
+        /// </summary>
+        /// <returns></returns>
+        protected async Task<bool> P2POnServerStop()
+        {
+            if (!IsP2PMode()) return false;
+            TimeSpan timer = new(0, 0, 6);
+            NetworkServer.SendToAll<P2PServerDisconnectMessage>(new(NetworkServer.connections));
+            await Task.Delay(timer);
+            return true;
+        }
+
+        /// <summary>
+        /// If True, Stop the Disconnection for the client
+        /// If False, Continue Disconnection process
+        /// </summary>
+        /// <returns></returns>
+        protected bool P2POnClientDisconnect(Dictionary<int, NetworkConnectionToClient> savedConnections)
+        {
+            if (!IsP2PMode() || NetworkServer.active || !NetworkClient.isConnected) return false;
+            try
+            {
+                var newHostConnection = savedConnections[1];
+                var myConnection = NetworkServer.localConnection;
+                //bool canBecomeNewServer = 0 < myConnection.connectionId && myConnection == newHostConnection;
+                var connections = NetworkServer.connections;
+                connections[0] = newHostConnection;
+                NetworkServer.connections = connections;
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
+            try
+            {
+                Debug.Log("Becoming Server");
+                while (!isNetworkActive)
+                {
+                    StartServer();
+                    StartClient();
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Log($"Cannot Be Server\n{e}");
+            }
+            return true;
         }
 
         // wrap ClientChangeScene call without parameters for use in Invoke.

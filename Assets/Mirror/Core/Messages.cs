@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Mirror
@@ -23,6 +24,15 @@ namespace Mirror
         // Normal = 0, LoadAdditive = 1, UnloadAdditive = 2
         public SceneOperation sceneOperation;
         public bool customHandling;
+    }
+
+    public struct P2PServerDisconnectMessage : NetworkMessage
+    {
+        public Dictionary<int, NetworkConnectionToClient> SavedConnections { get; private set; }
+        public P2PServerDisconnectMessage(Dictionary<int, NetworkConnectionToClient> savedConnections)
+        {
+            SavedConnections = savedConnections;
+        }
     }
 
     public enum SceneOperation : byte
