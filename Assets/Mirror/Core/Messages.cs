@@ -20,7 +20,7 @@ namespace Mirror
 
     public struct P2PMessage : NetworkMessage
     {
-        public string nextAddress;
+        public P2PSettings settings;
     }
 
     public struct SceneMessage : NetworkMessage

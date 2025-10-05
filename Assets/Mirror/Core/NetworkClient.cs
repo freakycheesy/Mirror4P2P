@@ -438,6 +438,7 @@ namespace Mirror
             // from transport which calls StopClient again, so check here
             // and short circuit running the Shutdown process twice.
             if (connectState == ConnectState.Disconnected) return;
+            if (P2POnClientDisconnect()) return;
 
             // Raise the event before changing ConnectState
             // because 'active' depends on this during shutdown
@@ -463,6 +464,35 @@ namespace Mirror
             // transport handlers are only added when connecting.
             // so only remove when actually disconnecting.
             RemoveTransportHandlers();
+        }
+
+        /// <summary>
+        /// If true, stop the disconnection for the client
+        /// If false, continue disconnection process
+        /// </summary>
+        /// <returns></returns>
+        internal static bool P2POnClientDisconnect()
+        {
+            var manager = NetworkManager.singleton;
+            if (!manager) return false;
+            if (!manager.IsP2PMode() || string.IsNullOrEmpty(manager.P2PSettings.nextAddress) || NetworkServer.active) return false;
+            Debug.Log("[P2P] Trying to connect");
+            if (manager.P2PNextAddressIsLocal)
+            {
+                manager.StartHost();
+                return true;
+            }
+            else
+            {
+                for (int i = 0; i < manager.P2PConnectionAttempts; i++)
+                {
+                    if (isConnecting) return true;
+                    manager.networkAddress = manager.P2PSettings.nextAddress;
+                    manager.StartClient();
+                }
+            }
+            Debug.Log($"[P2P] Failed to connect");
+            return false;
         }
 
         // transport errors are forwarded to high level
