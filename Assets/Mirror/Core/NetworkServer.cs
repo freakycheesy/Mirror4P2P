@@ -33,6 +33,7 @@ namespace Mirror
     {
         static bool initialized;
         public static int maxConnections;
+        public static NetworkTopologyMode networkTopologyMode;
 
         /// <summary>Server Update frequency, per second. Use around 60Hz for fast paced games like Counter-Strike to minimize latency. Use around 30Hz for games like WoW to minimize computations. Use around 1-10Hz for slow paced games like EVE.</summary>
         // overwritten by NetworkManager (if any)
@@ -266,10 +267,13 @@ namespace Mirror
 
             exceptionsDisconnect = true;
 
-            localConnection = null;
+            if (networkTopologyMode.HasFlag(NetworkTopologyMode.ClientToServer))
+            {
+                localConnection = null;
 
-            connections.Clear();
-            connectionsCopy.Clear();
+                connections.Clear();
+                connectionsCopy.Clear();
+            }
             handlers.Clear();
 
             // destroy all spawned objects, _then_ set inactive.

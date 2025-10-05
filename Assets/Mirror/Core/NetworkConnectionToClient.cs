@@ -19,7 +19,7 @@ namespace Mirror
         /// <summary>Unique identifier for this connection that is assigned by the transport layer.</summary>
         // assigned by transport, this id is unique for every connection on server.
         // clients don't know their own id and they don't know other client's ids.
-        public readonly int connectionId;
+        public int connectionId { get; protected set; }
 
         /// <summary>NetworkIdentities that this connection can see</summary>
         // TODO move to server's NetworkConnectionToClient?
@@ -71,6 +71,10 @@ namespace Mirror
             // buffer limit should be at least multiplier to have enough in there
             snapshotBufferSizeLimit = Mathf.Max((int)NetworkClient.snapshotSettings.bufferTimeMultiplier, snapshotBufferSizeLimit);
         }
+
+        public void ChangeConnectionId(int networkConnectionId) => connectionId = networkConnectionId;
+
+        public void ChangeClientAddress(string clientAddress) => address = clientAddress;
 
         public override string ToString() => $"connection({connectionId})";
 

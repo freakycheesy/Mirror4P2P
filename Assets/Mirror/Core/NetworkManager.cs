@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.Serialization;
@@ -64,8 +63,28 @@ namespace Mirror
 
         [Tooltip("Network Modes:\n"+
         "Client To Server: Default Mirror Networking, clients connect to a server and the session is done when the server stops.\n"+
-        "Peer To Peer: Distrubuted Authority, clients connect with each other and one client is marked as the server (Round Robin), and the session continues until everyone is disconnected.")]
+        "Peer To Peer: Distrubuted Authority, clients connect with each other and one client is marked as the server (Round Robin), and the session continues until everyone is disconnected.\n"+
+        "(WARNING: PLEASE USE P2P FOR LAN GAMES OR ENCRYPTED IPS/RELAYED GAMES FOR SECURITY REASONS)")]
         public NetworkTopologyMode networkTopologyMode = NetworkTopologyMode.ClientToServer;
+        [Tooltip("If P2P is enabled, use this to try change the address for the migration")]
+        public float p2PConnectionAttempts = 10;
+        [Tooltip("If P2P is enabled, you can receive the info the next address to connect to and more!")]
+        public bool p2PAuthenticated = false;
+
+        private string p2PNextAddress;
+        public string P2PNextAddress { get => p2PNextAddress; set => value = p2PNextAddress; }
+        private bool p2PNextAddressIsLocal;
+        public bool P2PNextAddressIsLocal
+        {
+            get
+            {
+                return p2PNextAddressIsLocal;
+            }
+            set
+            {
+                p2PNextAddressIsLocal = isNetworkActive && NetworkServer.localConnection != null ? P2PNextAddress == NetworkServer.localConnection.address : p2PNextAddressIsLocal;
+            }
+        } 
 
         /// <summary>Automatically switch to this scene upon going offline (on start / on disconnect / on shutdown).</summary>
         // transport layer
@@ -272,6 +291,16 @@ namespace Mirror
         // make sure to call base.Update() when overwriting
         public virtual void Update()
         {
+            NetworkServer.networkTopologyMode = networkTopologyMode;
+            if (NetworkServer.active && Time.time % sendRate >= 1)
+            {
+                if (NetworkServer.connections.Count > 1 && IsP2PMode())
+                {
+                    var message = new P2PMessage();
+                    message.nextAddress = NetworkServer.connections.Values.ToArray()[1].address;
+                    NetworkServer.SendToAll(message);
+                }
+            }
             ApplyConfiguration();
         }
 
@@ -594,9 +623,8 @@ namespace Mirror
         }
 
         /// <summary>Stops the server from listening and simulating the game.</summary>
-        public async void StopServer()
+        public void StopServer()
         {
-            if (await P2POnServerStop())
             // return if already stopped to avoid recursion deadlock
             if (!NetworkServer.active)
                 return;
@@ -772,12 +800,18 @@ namespace Mirror
             // Don't require authentication because server may send NotReadyMessage from ServerChangeScene
             NetworkClient.RegisterHandler<NotReadyMessage>(OnClientNotReadyMessageInternal, false);
             NetworkClient.RegisterHandler<SceneMessage>(OnClientSceneInternal, false);
-            if (IsP2PMode()) NetworkClient.RegisterHandler<P2PServerDisconnectMessage>((a)=>P2POnClientDisconnect(a.SavedConnections));
+            if(IsP2PMode()) NetworkClient.RegisterHandler<P2PMessage>(OnP2PMesssage, p2PAuthenticated);
+
             if (playerPrefab != null)
                 NetworkClient.RegisterPrefab(playerPrefab);
 
             foreach (GameObject prefab in spawnPrefabs.Where(t => t != null))
                 NetworkClient.RegisterPrefab(prefab);
+        }
+
+        private void OnP2PMesssage(P2PMessage message)
+        {
+            P2PNextAddress = message.nextAddress;
         }
 
         // This is the only way to clear the singleton, so another instance can be created.
@@ -1267,7 +1301,10 @@ namespace Mirror
         //   Disconnect() -> ask Transport -> Transport.OnDisconnected -> Cleanup
         void OnClientDisconnectInternal()
         {
-            if (P2POnClientDisconnect(NetworkServer.connections)) return;
+            if (IsP2PMode())
+            {
+                if (P2POnClientDisconnect()) return;
+            }
             //Debug.Log("NetworkManager.OnClientDisconnectInternal");
 
             // Only let this run once. StopClient in Host mode changes to ServerOnly
@@ -1325,54 +1362,32 @@ namespace Mirror
         public bool IsP2PMode() => networkTopologyMode == NetworkTopologyMode.P2P;
 
         /// <summary>
-        /// If True, Make Server send leave message
-        /// If False, Dont
+        /// If true, stop the disconnection for the client
+        /// If false, continue disconnection process
         /// </summary>
         /// <returns></returns>
-        protected async Task<bool> P2POnServerStop()
+        protected bool P2POnClientDisconnect()
         {
-            if (!IsP2PMode()) return false;
-            TimeSpan timer = new(0, 0, 6);
-            NetworkServer.SendToAll<P2PServerDisconnectMessage>(new(NetworkServer.connections));
-            await Task.Delay(timer);
-            return true;
-        }
-
-        /// <summary>
-        /// If True, Stop the Disconnection for the client
-        /// If False, Continue Disconnection process
-        /// </summary>
-        /// <returns></returns>
-        protected bool P2POnClientDisconnect(Dictionary<int, NetworkConnectionToClient> savedConnections)
-        {
-            if (!IsP2PMode() || NetworkServer.active || !NetworkClient.isConnected) return false;
-            try
+            if (!IsP2PMode() || string.IsNullOrEmpty(p2PNextAddress)) return false;
+            Debug.Log("[P2P] Trying to connect");
+            if (P2PNextAddressIsLocal)
             {
-                var newHostConnection = savedConnections[1];
-                var myConnection = NetworkServer.localConnection;
-                //bool canBecomeNewServer = 0 < myConnection.connectionId && myConnection == newHostConnection;
-                var connections = NetworkServer.connections;
-                connections[0] = newHostConnection;
-                NetworkServer.connections = connections;
+                StartHost();
+                return true;
             }
-            catch (Exception e)
+            else
             {
-                Debug.LogException(e);
-            }
-            try
-            {
-                Debug.Log("Becoming Server");
-                while (!isNetworkActive)
+                for (int i = 0; i < p2PConnectionAttempts; i++)
                 {
-                    StartServer();
+                    if (isNetworkActive) return true;
+                    networkAddress = P2PNextAddress;
                     StartClient();
+                    //NetworkClient.Connect(nextAddress);
+                    //StartClient(new(nextAddress));
                 }
             }
-            catch (Exception e)
-            {
-                Debug.Log($"Cannot Be Server\n{e}");
-            }
-            return true;
+            Debug.Log($"[P2P] Failed to connect");
+            return false;
         }
 
         // wrap ClientChangeScene call without parameters for use in Invoke.
