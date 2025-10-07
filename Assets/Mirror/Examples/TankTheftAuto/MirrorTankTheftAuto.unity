@@ -807,9 +807,12 @@ MonoBehaviour:
   unreliableBaselineRate: 1
   unreliableRedundancy: 0
   networkTopologyMode: 1
-  P2PConnectionAttempts: 10
-  P2PAuthenticated: 0
-  P2PNextAddress: 
+  P2PSettings:
+    nextAddress: 
+    connectionRecord: 0
+    connectionAttempts: 10
+    connectionTimeout: 3
+    useAuthentication: 0
   transport: {fileID: 2816348668128435076}
   networkAddress: localhost
   maxConnections: 100

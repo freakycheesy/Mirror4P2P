@@ -11,8 +11,37 @@ namespace Mirror
     [Serializable]
     public struct P2PSettings
     {
+        // Dynamic
         public string nextAddress;
         public int connectionRecord;
+
+        // Static
+        public float connectionAttempts;
+        public int connectionTimeout;
+        public bool useAuthentication;
+
+        public P2PSettings(float _connectionAttempts = 10, int _connectionTimeout = 3, bool _useAuthentication = false)
+        {
+            nextAddress = "";
+            p2pNextAddressIsLocal = false;
+            connectionRecord = 0;
+            connectionAttempts = _connectionAttempts;
+            connectionTimeout = _connectionTimeout;
+            useAuthentication = _useAuthentication;
+        }
+
+        private bool p2pNextAddressIsLocal;
+        public bool P2PNextAddressIsLocal
+        {
+            get
+            {
+                return p2pNextAddressIsLocal;
+            }
+            set
+            {
+                p2pNextAddressIsLocal = NetworkManager.singleton.isNetworkActive && NetworkServer.localConnection != null ? nextAddress == NetworkServer.localConnection.address : p2pNextAddressIsLocal;
+            }
+        }
     }
     public enum NetworkTopologyMode { ClientToServer, P2P }
     public enum PlayerSpawnMethod { Random, RoundRobin }
@@ -73,26 +102,8 @@ namespace Mirror
         "Peer To Peer: Distrubuted Authority, clients connect with each other and one client is marked as the server (Round Robin), and the session continues until everyone is disconnected.\n"+
         "(WARNING: PLEASE USE P2P FOR LAN GAMES OR ENCRYPTED IPS/RELAYED GAMES FOR SECURITY REASONS)")]
         public NetworkTopologyMode networkTopologyMode = NetworkTopologyMode.ClientToServer;
-        [Tooltip("If P2P is enabled, use this to try change the address for the migration")]
-        public float P2PConnectionAttempts = 10;
-        [Tooltip("If P2P is enabled, use this for the new host during migration to disable new players, if everyone does not connect in time start creating new players")]
-        public int P2PConnectionTimeout = 3;
-        [Tooltip("If P2P is enabled, you can receive the info the next address to connect to and more!")]
-        public bool P2PAuthenticated = false;
-        public P2PSettings P2PSettings;
+        public P2PSettings P2PSettings = new();
 
-        private bool p2pNextAddressIsLocal;
-        public bool P2PNextAddressIsLocal
-        {
-            get
-            {
-                return p2pNextAddressIsLocal;
-            }
-            set
-            {
-                p2pNextAddressIsLocal = isNetworkActive && NetworkServer.localConnection != null ? P2PSettings.nextAddress == NetworkServer.localConnection.address : p2pNextAddressIsLocal;
-            }
-        } 
 
         /// <summary>Automatically switch to this scene upon going offline (on start / on disconnect / on shutdown).</summary>
         // transport layer
@@ -312,7 +323,8 @@ namespace Mirror
                 if (NetworkServer.connections.Count > 1)
                 {
                     var message = new P2PMessage();
-                    message.settings.nextAddress = NetworkServer.connections.Values.ToArray()[1].address;
+                    string address = NetworkServer.connections.Values.ToArray()[1].address;
+                    message.settings.nextAddress = address.Contains("::") ? "localhost" : address;
                     message.settings.connectionRecord = NetworkServer.connections.Count;
                     NetworkServer.SendToAll(message);
                 }
@@ -821,7 +833,7 @@ namespace Mirror
             // Don't require authentication because server may send NotReadyMessage from ServerChangeScene
             NetworkClient.RegisterHandler<NotReadyMessage>(OnClientNotReadyMessageInternal, false);
             NetworkClient.RegisterHandler<SceneMessage>(OnClientSceneInternal, false);
-            if(IsP2PMode()) NetworkClient.RegisterHandler<P2PMessage>(OnP2PMesssage, P2PAuthenticated);
+            if(IsP2PMode()) NetworkClient.RegisterHandler<P2PMessage>(OnP2PMesssage, P2PSettings.useAuthentication);
 
             if (playerPrefab != null)
                 NetworkClient.RegisterPrefab(playerPrefab);

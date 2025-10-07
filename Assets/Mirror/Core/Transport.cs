@@ -193,6 +193,8 @@ namespace Mirror
         public virtual void ClientLateUpdate() {}
         public virtual void ServerLateUpdate() {}
 
+        public virtual void ChangeNetworkAddress(string newAddress) { }
+
         /// <summary>Shut down the transport, both as client and server</summary>
         public abstract void Shutdown();
 

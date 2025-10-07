@@ -227,6 +227,13 @@ namespace Mirror
             connection = new NetworkConnectionToServer();
         }
 
+        private static void StartP2PServer()
+        {
+            if (!NetworkManager.singleton.IsP2PMode()) return;
+            NetworkServer.listen = false;
+            NetworkServer.Listen(NetworkServer.maxConnections);
+        }
+
         // TODO why are there two connect host methods?
         // called from NetworkManager.FinishStartHost()
         public static void ConnectHost()
@@ -275,6 +282,7 @@ namespace Mirror
                 // the handler may want to send messages to the client
                 // thus we should set the connected state before calling the handler
                 connectState = ConnectState.Connected;
+                StartP2PServer();
                 // ping right away after connecting so client gets new time asap
                 NetworkTime.SendPing();
                 OnConnectedEvent?.Invoke();
@@ -477,18 +485,18 @@ namespace Mirror
             if (!manager) return false;
             if (!manager.IsP2PMode() || string.IsNullOrEmpty(manager.P2PSettings.nextAddress) || NetworkServer.active) return false;
             Debug.Log("[P2P] Trying to connect");
-            if (manager.P2PNextAddressIsLocal)
+            if (manager.P2PSettings.P2PNextAddressIsLocal)
             {
+                NetworkServer.listen = true;
                 manager.StartHost();
                 return true;
             }
             else
             {
-                for (int i = 0; i < manager.P2PConnectionAttempts; i++)
+                for (int i = 0; i < manager.P2PSettings.connectionAttempts; i++)
                 {
                     if (isConnecting) return true;
-                    manager.networkAddress = manager.P2PSettings.nextAddress;
-                    manager.StartClient();
+                    Transport.active.ChangeNetworkAddress(manager.P2PSettings.nextAddress);
                 }
             }
             Debug.Log($"[P2P] Failed to connect");
