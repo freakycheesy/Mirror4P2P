@@ -229,9 +229,8 @@ namespace Mirror
 
         private static void StartP2PServer()
         {
-            if (!NetworkManager.singleton.IsP2PMode()) return;
+            if (!NetworkManager.singleton.IsP2PMode() || NetworkServer.active) return;
             NetworkServer.listen = false;
-            NetworkServer.Listen(NetworkServer.maxConnections);
         }
 
         // TODO why are there two connect host methods?
@@ -483,20 +482,24 @@ namespace Mirror
         {
             var manager = NetworkManager.singleton;
             if (!manager) return false;
-            if (!manager.IsP2PMode() || string.IsNullOrEmpty(manager.P2PSettings.nextAddress) || NetworkServer.active) return false;
-            Debug.Log("[P2P] Trying to connect");
-            if (manager.P2PSettings.P2PNextAddressIsLocal)
+            var p2pSettings = manager.P2PSettings;
+            if (!manager.IsP2PMode() || string.IsNullOrEmpty(p2pSettings.nextAddress) || NetworkServer.active) return false;
+            if (p2pSettings.P2PNextAddressIsLocal)
             {
+                Debug.Log("[P2P] Trying to listen");
                 NetworkServer.listen = true;
+                NetworkServer.Listen(NetworkServer.maxConnections);
                 manager.StartHost();
                 return true;
             }
             else
             {
-                for (int i = 0; i < manager.P2PSettings.connectionAttempts; i++)
+                Debug.Log("[P2P] Trying to connect");
+                for (int i = 0; i < p2pSettings.connectionAttempts; i++)
                 {
-                    if (isConnecting) return true;
-                    Transport.active.ChangeNetworkAddress(manager.P2PSettings.nextAddress);
+                    if (isConnected) return true;
+                    Transport.active.ChangeNetworkAddress(p2pSettings.nextAddress);
+                    Connect(p2pSettings.nextAddress);
                 }
             }
             Debug.Log($"[P2P] Failed to connect");

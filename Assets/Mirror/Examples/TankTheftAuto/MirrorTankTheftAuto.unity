@@ -945,38 +945,26 @@ MonoBehaviour:
   m_GameObject: {fileID: 2816348668128435081}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7064b1b1d0671194baf55fa8d5f564d6, type: 3}
+  m_Script: {fileID: 11500000, guid: 6b0fecffa3f624585964b0d0eb21b18e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  clientToServerTransport: {fileID: 754311488}
-  serverIP: 127.0.0.1
-  serverPort: 7777
-  endpointServerPort: 8080
-  heartBeatInterval: 3
-  connectOnAwake: 1
-  authenticationKey: Secret Auth Key
-  disconnectedFromRelay:
-    m_PersistentCalls:
-      m_Calls: []
-  connectedToRelay:
-    m_PersistentCalls:
-      m_Calls: []
-  useNATPunch: 0
-  NATPunchtroughPort: 1
-  useLoadBalancer: 1
-  loadBalancerPort: 6770
-  loadBalancerAddress: 127.0.0.1
-  serverName: My awesome server!
-  extraServerData: Map 1
-  maxServerPlayers: 10
-  isPublicServer: 1
-  serverListUpdated:
-    m_PersistentCalls:
-      m_Calls: []
-  serverStatus: Not Started.
-  serverId: 
-  appId: -1
-  region: 1
+  port: 7777
+  DualMode: 1
+  NoDelay: 1
+  Interval: 10
+  Timeout: 10000
+  RecvBufferSize: 7361536
+  SendBufferSize: 7361536
+  FastResend: 2
+  ReceiveWindowSize: 4096
+  SendWindowSize: 4096
+  MaxRetransmit: 40
+  MaximizeSocketBuffers: 1
+  ReliableMaxMessageSize: 297433
+  UnreliableMaxMessageSize: 1194
+  debugLog: 0
+  statisticsGUI: 0
+  statisticsLog: 0
 --- !u!1 &4239341309712137293
 GameObject:
   m_ObjectHideFlags: 0

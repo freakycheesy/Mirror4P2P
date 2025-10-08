@@ -13,7 +13,6 @@ namespace Mirror
     {
         // Dynamic
         public string nextAddress;
-        public int connectionRecord;
 
         // Static
         public float connectionAttempts;
@@ -24,7 +23,6 @@ namespace Mirror
         {
             nextAddress = "";
             p2pNextAddressIsLocal = false;
-            connectionRecord = 0;
             connectionAttempts = _connectionAttempts;
             connectionTimeout = _connectionTimeout;
             useAuthentication = _useAuthentication;
@@ -39,7 +37,21 @@ namespace Mirror
             }
             set
             {
-                p2pNextAddressIsLocal = NetworkManager.singleton.isNetworkActive && NetworkServer.localConnection != null ? nextAddress == NetworkServer.localConnection.address : p2pNextAddressIsLocal;
+                var localConnection = NetworkServer.localConnection;
+                var hasLocalConnection = localConnection != null;
+                p2pNextAddressIsLocal = NetworkManager.singleton.isNetworkActive && hasLocalConnection ? nextAddress == LocalPublicAddress : p2pNextAddressIsLocal;
+            }
+        }
+        public const string LOCALADDRESS = "localhost";
+        public string LocalPublicAddress
+        {
+            get
+            {
+                var localConnection = NetworkServer.localConnection;
+                var hasLocalConnection = localConnection != null;
+                var isLocalhostAddress = hasLocalConnection ? localConnection.address.Contains("::") || localConnection.address.Contains(LOCALADDRESS) : true;
+                string address = hasLocalConnection ? (isLocalhostAddress ? LOCALADDRESS: localConnection.address) : LOCALADDRESS;
+                return address;
             }
         }
     }
@@ -325,7 +337,6 @@ namespace Mirror
                     var message = new P2PMessage();
                     string address = NetworkServer.connections.Values.ToArray()[1].address;
                     message.settings.nextAddress = address.Contains("::") ? "localhost" : address;
-                    message.settings.connectionRecord = NetworkServer.connections.Count;
                     NetworkServer.SendToAll(message);
                 }
             }

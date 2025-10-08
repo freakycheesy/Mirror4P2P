@@ -23,7 +23,6 @@ public class MirrorP2PGUI : MonoBehaviour
         }
 
         GUILayout.Label($"Next Address: {settings.nextAddress}");
-        GUILayout.Label($"Connection Record: {settings.connectionRecord}");
 
     }
 }
